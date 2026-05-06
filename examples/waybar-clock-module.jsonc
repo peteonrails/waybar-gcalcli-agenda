@@ -1,0 +1,13 @@
+// Drop this into your ~/.config/waybar/config.jsonc, replacing your existing
+// "clock" block. Also add "custom/clock" to your modules-center (or wherever
+// you currently list "clock"). Adjust the script path if you placed it
+// somewhere other than ~/.config/waybar/scripts/.
+
+"custom/clock": {
+  "exec": "$HOME/.config/waybar/scripts/clock-agenda.sh",
+  "return-type": "json",
+  "interval": 1,
+  "tooltip": true,
+  "on-click": "foot -a floating agenda",
+  "on-click-right": "foot -a floating tzselect"
+}

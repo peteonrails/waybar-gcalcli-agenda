@@ -1,0 +1,9 @@
+[calendars]
+# Calendar(s) used by default when no --calendar flag is given.
+default-calendars = ["you@example.com"]
+
+# Calendars to hide from `gcalcli agenda` even though they're on your account.
+ignore-calendars = ["Holidays in United States"]
+
+[output]
+week-start = "monday"
