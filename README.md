@@ -8,6 +8,8 @@ A small, opinionated setup for displaying your Google Calendar agenda on Linux:
 - **`agenda` script** — a self-refreshing terminal view you can leave open in a
   tmux pane / floating window, or launch from the Waybar clock with a click.
 
+![agenda script running as a terminal tile alongside top, btop, and a music player](docs/agenda-tile.png)
+
 Both views are driven by [`gcalcli`](https://github.com/insanum/gcalcli), which
 talks to the Google Calendar API directly. This avoids a class of rendering
 bugs that plague iCal-based TUIs (notably, duplicated recurring events caused
