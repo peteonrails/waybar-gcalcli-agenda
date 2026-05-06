@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=Agenda
+GenericName=Calendar agenda
+Comment=Live-refreshing Google Calendar agenda backed by gcalcli
+Exec=agenda
+# Terminal=true relies on $TERMINAL or xdg-terminal-exec to pick a terminal.
+# On Omarchy/Hyprland setups you may prefer a floating tile instead — comment
+# out Terminal=true and use the line below:
+#   Exec=omarchy-launch-floating-terminal-with-presentation agenda
+#   Terminal=false
+Terminal=true
+Icon=office-calendar
+Categories=Office;Calendar;Utility;ConsoleOnly;
+Keywords=calendar;agenda;gcalcli;google;meeting;schedule;
+StartupNotify=false

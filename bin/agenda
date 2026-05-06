@@ -60,7 +60,11 @@ def fmt_day(d: str) -> str:
 
 def fetch_tsv() -> tuple[str | None, str | None]:
     proc = subprocess.run(
-        ["gcalcli", "--nocolor", "agenda", "--tsv", "--details", "conference"],
+        [
+            "gcalcli", "--nocolor", "agenda", "--tsv",
+            "--details", "conference",
+            "--details", "url",
+        ],
         capture_output=True,
         text=True,
         check=False,

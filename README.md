@@ -18,9 +18,10 @@ by RRULE + RECURRENCE-ID overrides — the same data Google emits in CalDAV).
 ## What's in here
 
 ```
-scripts/clock-agenda.sh        # Waybar custom/clock module: time + agenda tooltip
-bin/agenda                     # Live-refreshing terminal agenda view
-examples/gcalcli-config.toml   # Drop-in gcalcli defaults
+scripts/clock-agenda.sh             # Waybar custom/clock module: time + agenda tooltip
+bin/agenda                          # Live-refreshing terminal agenda view
+share/applications/agenda.desktop   # XDG desktop entry for app launchers
+examples/gcalcli-config.toml        # Drop-in gcalcli defaults
 examples/waybar-clock-module.jsonc  # Waybar module snippet
 ```
 
@@ -111,6 +112,20 @@ Modern terminals render this as a clickable link — Ctrl-click in `foot`,
 Cmd-click in `iTerm2`, click in `kitty` / `alacritty` / `ghostty` / `wezterm`.
 
 [osc8]: https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda
+
+### Optional: launch from your app launcher
+
+```bash
+install -Dm644 share/applications/agenda.desktop ~/.local/share/applications/agenda.desktop
+update-desktop-database ~/.local/share/applications 2>/dev/null || true
+```
+
+`Agenda` will now appear in Walker / rofi / GNOME activities. The shipped
+entry uses `Terminal=true`, which relies on `xdg-terminal-exec` or the
+`$TERMINAL` env var to choose a terminal emulator. Omarchy/Hyprland users
+who'd rather get the floating tile look should edit the `.desktop` file
+to use `omarchy-launch-floating-terminal-with-presentation agenda` instead
+(see the comment in the file).
 
 ## 4. Hook it into Waybar
 
