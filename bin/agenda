@@ -1,26 +1,170 @@
-#!/bin/bash
-# Live-refreshing agenda view backed by gcalcli.
-# Usage: agenda [interval_seconds] [-- gcalcli args...]
-#   agenda           # default 60s refresh, today + next several days
-#   agenda 30        # 30s refresh
-#   agenda 60 -- calw  # weekly grid view instead of agenda
+#!/usr/bin/env python3
+"""Live-refreshing agenda view backed by gcalcli.
 
-INTERVAL="${1:-60}"
-shift 2>/dev/null || true
-if [ "${1:-}" = "--" ]; then shift; fi
+Each event title is wrapped in an OSC 8 terminal hyperlink pointing to:
+  1. the Zoom/Meet/etc. conference URL (if Google Calendar has one), else
+  2. the Google Meet hangout link (if any), else
+  3. the Google Calendar event page (always available).
 
-GCAL_ARGS=("${@:-agenda}")
+Modern terminals (foot, kitty, alacritty, ghostty, wezterm) render OSC 8
+sequences as clickable links. Ctrl-click in foot, Cmd-click in iTerm, etc.
 
-trap 'tput cnorm; exit 0' INT TERM
-tput civis 2>/dev/null  # hide cursor
+Usage: agenda [interval_seconds] [-- gcalcli args...]
+  agenda           # default 60s refresh, custom render with hyperlinks
+  agenda 30        # 30s refresh
+  agenda 60 -- calw    # weekly grid via gcalcli (no link enrichment)
+"""
 
-while true; do
-    clear
-    printf '\033[1;36m%s\033[0m  (refresh %ss, q/Ctrl-C to quit)\n\n' \
-        "$(date '+%a %d %b %Y  %H:%M:%S')" "$INTERVAL"
-    gcalcli "${GCAL_ARGS[@]}"
-    # sleep but allow q to quit early
-    read -t "$INTERVAL" -n 1 key 2>/dev/null && [ "$key" = "q" ] && break || true
-done
+from __future__ import annotations
 
-tput cnorm 2>/dev/null
+import csv
+import os
+import select
+import signal
+import subprocess
+import sys
+import termios
+import tty
+from datetime import datetime
+
+DEFAULT_INTERVAL = 60
+
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+CYAN = "\033[36m"
+YELLOW = "\033[33m"
+HIDE_CURSOR = "\033[?25l"
+SHOW_CURSOR = "\033[?25h"
+CLEAR = "\033[2J\033[H"
+
+
+def osc8(url: str, text: str) -> str:
+    if not url:
+        return text
+    return f"\033]8;;{url}\033\\{text}\033]8;;\033\\"
+
+
+def fmt_time(start_time: str) -> str:
+    if not start_time:
+        return "(all day)"
+    h, m = map(int, start_time.split(":"))
+    suffix = "am" if h < 12 else "pm"
+    h12 = h % 12 or 12
+    return f"{h12}:{m:02d}{suffix}"
+
+
+def fmt_day(d: str) -> str:
+    return datetime.strptime(d, "%Y-%m-%d").strftime("%a %b %d")
+
+
+def fetch_tsv() -> tuple[str | None, str | None]:
+    proc = subprocess.run(
+        ["gcalcli", "--nocolor", "agenda", "--tsv", "--details", "conference"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return None, (proc.stderr.strip() or "gcalcli failed")
+    return proc.stdout, None
+
+
+def render(tsv: str) -> str:
+    reader = csv.DictReader(tsv.splitlines(), delimiter="\t")
+    lines: list[str] = []
+    prev_date: str | None = None
+    for row in reader:
+        sd = row.get("start_date", "")
+        if not sd:
+            continue
+        title = row.get("title", "").strip()
+        if title == "Home" and not row.get("start_time"):
+            # All-day "Home" calendar marker — skip, it's just a calendar name
+            continue
+        if sd != prev_date:
+            if prev_date is not None:
+                lines.append("")
+            lines.append(f"{BOLD}{YELLOW}{fmt_day(sd)}{RESET}")
+            prev_date = sd
+        url = (
+            row.get("conference_uri")
+            or row.get("hangout_link")
+            or row.get("html_link")
+            or ""
+        )
+        time_str = fmt_time(row.get("start_time", ""))
+        linked = osc8(url, title)
+        lines.append(f"  {time_str:>9}   {linked}")
+    return "\n".join(lines) if lines else "(no upcoming events)"
+
+
+def header(interval: int) -> str:
+    now = datetime.now().strftime("%a %d %b %Y  %H:%M:%S")
+    return f"{BOLD}{CYAN}{now}{RESET}  (refresh {interval}s, q/Ctrl-C to quit)\n\n"
+
+
+def render_default(interval: int) -> str:
+    tsv, err = fetch_tsv()
+    body = f"agenda unavailable: {err}\n" if err else render(tsv) + "\n"
+    return header(interval) + body
+
+
+def render_passthrough(interval: int, args: list[str]) -> str:
+    proc = subprocess.run(
+        ["gcalcli", *args], capture_output=True, text=True, check=False
+    )
+    out = proc.stdout if proc.returncode == 0 else (
+        proc.stderr or "gcalcli failed\n"
+    )
+    return header(interval) + out
+
+
+def wait_or_quit(interval: int) -> bool:
+    """Sleep up to `interval` seconds; return True if user pressed q."""
+    r, _, _ = select.select([sys.stdin], [], [], interval)
+    if not r:
+        return False
+    ch = sys.stdin.read(1)
+    return ch.lower() == "q"
+
+
+def main() -> None:
+    args = sys.argv[1:]
+    interval = DEFAULT_INTERVAL
+    if args and args[0].isdigit():
+        interval = int(args.pop(0))
+    passthrough_args: list[str] = []
+    if args and args[0] == "--":
+        passthrough_args = args[1:]
+
+    sys.stdout.write(HIDE_CURSOR)
+    sys.stdout.flush()
+
+    fd = sys.stdin.fileno() if sys.stdin.isatty() else None
+    old = termios.tcgetattr(fd) if fd is not None else None
+    try:
+        if fd is not None:
+            tty.setcbreak(fd)
+        while True:
+            sys.stdout.write(CLEAR)
+            if passthrough_args:
+                sys.stdout.write(render_passthrough(interval, passthrough_args))
+            else:
+                sys.stdout.write(render_default(interval))
+            sys.stdout.flush()
+            if wait_or_quit(interval):
+                break
+    finally:
+        if old is not None:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        sys.stdout.write(SHOW_CURSOR)
+        sys.stdout.flush()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.stdout.write(SHOW_CURSOR)
+        sys.stdout.write("\n")

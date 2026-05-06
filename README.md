@@ -104,6 +104,14 @@ agenda 60 -- calw   # weekly grid view; pass any gcalcli subcommand after --
 
 Press `q` (or Ctrl-C) to quit.
 
+Each meeting title is wrapped in an [OSC 8 terminal hyperlink][osc8] pointing
+to the event's Zoom / Google Meet conference URL when one is set on the
+calendar event, falling back to the Google Calendar event page otherwise.
+Modern terminals render this as a clickable link — Ctrl-click in `foot`,
+Cmd-click in `iTerm2`, click in `kitty` / `alacritty` / `ghostty` / `wezterm`.
+
+[osc8]: https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda
+
 ## 4. Hook it into Waybar
 
 Install the tooltip script:
