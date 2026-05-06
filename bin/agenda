@@ -20,6 +20,7 @@ from __future__ import annotations
 import csv
 import os
 import select
+import shutil
 import signal
 import subprocess
 import sys
@@ -74,23 +75,58 @@ def fetch_tsv() -> tuple[str | None, str | None]:
     return proc.stdout, None
 
 
+def parse_dt(date_str: str, time_str: str) -> datetime | None:
+    if not date_str or not time_str:
+        return None
+    try:
+        return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+    except ValueError:
+        return None
+
+
+def now_rule(now: datetime, width: int) -> str:
+    label = now.strftime("%-I:%M%p").lower()
+    pad = max(0, width - len(label) - 1)
+    return f"{DIM}{'─' * pad} {label}{RESET}"
+
+
 def render(tsv: str) -> str:
-    reader = csv.DictReader(tsv.splitlines(), delimiter="\t")
-    lines: list[str] = []
-    prev_date: str | None = None
-    for row in reader:
+    now = datetime.now()
+    width = shutil.get_terminal_size((80, 24)).columns
+
+    events = []
+    for row in csv.DictReader(tsv.splitlines(), delimiter="\t"):
         sd = row.get("start_date", "")
         if not sd:
             continue
         title = row.get("title", "").strip()
         if title == "Home" and not row.get("start_time"):
-            # All-day "Home" calendar marker — skip, it's just a calendar name
             continue
+        events.append(row)
+
+    lines: list[str] = []
+    prev_date: str | None = None
+    rule_inserted = False
+
+    for row in events:
+        sd = row["start_date"]
+        end_dt = parse_dt(row.get("end_date", sd), row.get("end_time", ""))
+        is_past = end_dt is not None and end_dt < now
+
+        if not rule_inserted and not is_past:
+            # First event whose end is in the future (or all-day) — drop the rule
+            # right above it. Day header for that event gets emitted afterwards
+            # so the rule sits between the past block and the upcoming block.
+            lines.append(now_rule(now, width))
+            rule_inserted = True
+
         if sd != prev_date:
             if prev_date is not None:
                 lines.append("")
             lines.append(f"{BOLD}{YELLOW}{fmt_day(sd)}{RESET}")
             prev_date = sd
+
+        title = row.get("title", "").strip()
         url = (
             row.get("conference_uri")
             or row.get("hangout_link")
@@ -99,7 +135,15 @@ def render(tsv: str) -> str:
         )
         time_str = fmt_time(row.get("start_time", ""))
         linked = osc8(url, title)
-        lines.append(f"  {time_str:>9}   {linked}")
+        line = f"  {time_str:>9}   {linked}"
+        if is_past:
+            line = f"{DIM}{line}{RESET}"
+        lines.append(line)
+
+    if not rule_inserted:
+        # All events are in the past (or no events at all) — rule goes at the bottom.
+        lines.append(now_rule(now, width))
+
     return "\n".join(lines) if lines else "(no upcoming events)"
 
 
