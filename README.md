@@ -1,5 +1,7 @@
 # waybar-gcalcli-agenda
 
+![Waybar clock tooltip showing today's agenda](docs/screenshot.png)
+
 A small, opinionated setup for displaying your Google Calendar agenda on Linux:
 
 - **Waybar tooltip** — hover the clock to see the next several days of meetings.
